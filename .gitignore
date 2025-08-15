@@ -1,0 +1,23 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*.so
+
+# Virtual environment
+.venv/
+env/
+venv/
+
+# Streamlit secrets
+.streamlit/secrets.toml
+
+# OS junk files
+.DS_Store
+Thumbs.db
+
+# Logs & cache
+*.log
+.cache/
+.pytest_cache/
