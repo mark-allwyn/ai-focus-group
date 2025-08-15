@@ -1,4 +1,4 @@
-```python
+
 """
 Multi-Persona Focus Group Chatbot
 A Streamlit app for simulating diverse perspectives on user questions
@@ -1111,4 +1111,4 @@ def main():
 
 if __name__ == "__main__":
     main()
-```
+
