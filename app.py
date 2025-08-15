@@ -1,3 +1,4 @@
+```python
 """
 Multi-Persona Focus Group Chatbot
 A Streamlit app for simulating diverse perspectives on user questions
@@ -442,24 +443,113 @@ def call_llm(prompt: str, model: str = "OpenAI") -> str:
     else:
         return f"Unknown model: {model}"
 
+# ----------- NEW: generic (non-persona) LLM calls for summaries -----------
+
+def call_openai_plain(prompt: str, max_tokens: int = 600, temperature: float = 0.2) -> str:
+    """Plain OpenAI call without persona system or tools (for summaries)."""
+    try:
+        from openai import OpenAI
+        api_key = st.secrets.get("OPENAI_API_KEY", "")
+        if not api_key:
+            return "ERROR: OpenAI API key not found. Please add OPENAI_API_KEY to .streamlit/secrets.toml"
+        client = OpenAI(api_key=api_key)
+        resp = client.chat.completions.create(
+            model="gpt-4.1-2025-04-14",
+            messages=[
+                {"role": "system", "content": "You are a concise, neutral meeting summarizer. No emojis."},
+                {"role": "user", "content": prompt}
+            ],
+            max_tokens=max_tokens,
+            temperature=temperature
+        )
+        return resp.choices[0].message.content or ""
+    except ImportError:
+        return "ERROR: OpenAI library not installed. Run: pip install openai"
+    except Exception as e:
+        return f"OpenAI API Error: {str(e)}"
+
+def call_gemini_plain(prompt: str, max_tokens: int = 600, temperature: float = 0.2) -> str:
+    """Plain Gemini call without persona system (for summaries)."""
+    try:
+        import google.generativeai as genai
+        api_key = st.secrets.get("GEMINI_API_KEY", "")
+        if not api_key:
+            return "ERROR: Gemini API key not found. Please add GEMINI_API_KEY to .streamlit/secrets.toml"
+        genai.configure(api_key=api_key)
+        model = genai.GenerativeModel(
+            'gemini-2.5-pro',
+            system_instruction="You are a concise, neutral meeting summarizer. No emojis."
+        )
+        resp = model.generate_content(prompt, generation_config={"temperature": temperature})
+        return getattr(resp, "text", "") or ""
+    except ImportError:
+        return "ERROR: Google Generative AI library not installed. Run: pip install google-generativeai"
+    except Exception as e:
+        return f"Gemini API Error: {str(e)}"
+
+def call_claude_plain(prompt: str, max_tokens: int = 600, temperature: float = 0.2) -> str:
+    """Plain Claude call without persona system (for summaries)."""
+    try:
+        import anthropic
+        api_key = st.secrets.get("CLAUDE_API_KEY", "")
+        if not api_key:
+            return "ERROR: Claude API key not found. Please add CLAUDE_API_KEY to .streamlit/secrets.toml"
+        client = anthropic.Anthropic(api_key=api_key)
+        resp = client.messages.create(
+            model="claude-sonnet-4-20250514",
+            max_tokens=max_tokens,
+            temperature=temperature,
+            system="You are a concise, neutral meeting summarizer. No emojis.",
+            messages=[{"role": "user", "content": prompt}]
+        )
+        return resp.content[0].text if resp.content else ""
+    except ImportError:
+        return "ERROR: Anthropic library not installed. Run: pip install anthropic"
+    except Exception as e:
+        return f"Claude API Error: {str(e)}"
+
+def call_llm_plain(prompt: str) -> str:
+    """Route plain (non-persona) summarization to the default model."""
+    model = st.session_state.get("default_model", "OpenAI")
+    if model == "OpenAI":
+        return call_openai_plain(prompt)
+    elif model == "Gemini":
+        return call_gemini_plain(prompt)
+    elif model == "Claude":
+        return call_claude_plain(prompt)
+    else:
+        return "Unknown default model for summarization."
+
+def summarize_conversation(full_text: str) -> str:
+    """Summarize the entire transcript text into an overview, highlights, and actions."""
+    prompt = (
+        "Summarize the following multi-persona conversation into:\n"
+        "1) A single-paragraph overview (<=120 words)\n"
+        "2) 5–8 concise bullet highlights (agreements, disagreements, notable nuances)\n"
+        "3) Action items or follow-up questions (if any)\n\n"
+        "Keep it neutral and specific. No emojis.\n\n"
+        f"=== Conversation Transcript Start ===\n{full_text}\n=== Conversation Transcript End ==="
+    )
+    return call_llm_plain(prompt)
+
+# ----------- Persona answer generation -----------
+
 def generate_persona_answer(persona: Persona, question: str, context: str = "") -> str:
     """Generate an answer from a specific persona's perspective"""
     prompt = generate_persona_prompt(persona, question, context)
     response = call_llm(prompt, persona.llm_model)
     # Clean any emojis that might slip through
-    # Remove common emoji unicode ranges
     emoji_pattern = re.compile("["
-        u"\U0001F600-\U0001F64F"  # emoticons
-        u"\U0001F300-\U0001F5FF"  # symbols & pictographs
-        u"\U0001F680-\U0001F6FF"  # transport & map symbols
-        u"\U0001F1E0-\U0001F1FF"  # flags
+        u"\U0001F600-\U0001F64F"
+        u"\U0001F300-\U0001F5FF"
+        u"\U0001F680-\U0001F6FF"
+        u"\U0001F1E0-\U0001F1FF"
         u"\U00002702-\U000027B0"
         u"\U000024C2-\U0001F251"
-        u"\U0001F900-\U0001F9FF"  # Supplemental Symbols and Pictographs
-        u"\U00002600-\U000026FF"  # Miscellaneous Symbols
-        u"\U00002700-\U000027BF"  # Dingbats
+        u"\U0001F900-\U0001F9FF"
+        u"\U00002600-\U000026FF"
+        u"\U00002700-\U000027BF"
         "]+", flags=re.UNICODE)
-    
     cleaned_response = emoji_pattern.sub('', response)
     return cleaned_response
 
@@ -467,23 +557,19 @@ def get_conversation_context(max_turns: int = 3) -> str:
     """Get recent conversation context for continuity"""
     if not st.session_state.turns:
         return ""
-    
     recent_turns = st.session_state.turns[-max_turns:]
     context_parts = []
     for i, turn in enumerate(recent_turns, 1):
         context_parts.append(f"Q{i}: {turn.user_question[:50]}...")
-        # Add brief summary of responses
         if turn.answers_by_persona:
             sample_answer = list(turn.answers_by_persona.values())[0][:50]
             context_parts.append(f"Group discussed: {sample_answer}...")
-    
     return " | ".join(context_parts) if context_parts else ""
 
 def export_transcript() -> str:
     """Export conversation transcript to text format"""
     if not st.session_state.turns:
         return "No conversation to export yet."
-    
     transcript = []
     transcript.append("FOCUS GROUP TRANSCRIPT")
     transcript.append("=" * 50)
@@ -491,19 +577,15 @@ def export_transcript() -> str:
     transcript.append(f"Participants: {', '.join(sorted(st.session_state.selected_persona_names))}")
     transcript.append("=" * 50)
     transcript.append("")
-    
     for i, turn in enumerate(st.session_state.turns, 1):
         transcript.append(f"=== Turn {i} — {turn.timestamp} ===")
         transcript.append(f"User: {turn.user_question}")
         transcript.append("")
-        
         for name, answer in turn.answers_by_persona.items():
             transcript.append(f"{name}: {answer}")
             transcript.append("")
-        
         transcript.append("-" * 30)
         transcript.append("")
-    
     return "\n".join(transcript)
 
 def render_persona_card(persona: Persona, answer: str):
@@ -517,11 +599,80 @@ def render_persona_card(persona: Persona, answer: str):
             model_display = persona.llm_model if persona.llm_model != "Default" else st.session_state.default_model
             st.caption(f"Model: {model_display}")
         with col2:
-            # Show personality chips
             traits_html = " ".join([f"`{trait}`" for trait in persona.personality_traits[:3]])
             st.markdown(traits_html)
             st.markdown(f"**{persona.name}:** {answer}")
         st.divider()
+
+# ----------- NEW: Re-ask same question with self memory -----------
+
+def _trim(txt: str, limit: int = 900) -> str:
+    if not txt:
+        return ""
+    return txt if len(txt) <= limit else txt[:limit] + "…"
+
+def rerun_last_turn_with_self_memory():
+    """Re-run the most recent question; each persona sees their own prior answer and can update it.
+    Preserves current behavior: random speaking order and in-turn awareness."""
+    if not st.session_state.turns:
+        st.warning("No previous turn to re-run.")
+        return
+
+    past_turn = st.session_state.turns[-1]
+    question = past_turn.user_question
+
+    # Use the personas who answered that past turn and still exist now
+    prior_names = list(past_turn.answers_by_persona.keys())
+    personas = [p for p in st.session_state.personas if p.name in prior_names]
+
+    if not personas:
+        st.warning("No matching personas from the last turn are available to re-run.")
+        return
+
+    ordered = personas[:]
+    random.shuffle(ordered)
+
+    answers: Dict[str, str] = {}
+    discussion_lines: List[str] = []
+
+    for persona in ordered:
+        self_prior = past_turn.answers_by_persona.get(persona.name)
+        if self_prior:
+            self_block = (
+                "Your previous answer to this same question was:\n"
+                f"\"{_trim(self_prior)}\"\n\n"
+                "Guidance: In first person, reflect on your prior stance. "
+                "Do not repeat verbatim. State what you keep, what you change, and why."
+            )
+        else:
+            self_block = (
+                "You did not answer this question previously. "
+                "Provide a concise first-person perspective now."
+            )
+
+        if discussion_lines:
+            in_turn_block = (
+                "Prior speakers in this re-run:\n"
+                + "\n".join(discussion_lines)
+                + "\nBriefly acknowledge or react where relevant before adding your view."
+            )
+        else:
+            in_turn_block = "You are the first to speak in this re-run. Be clear and concise."
+
+        turn_context = f"{self_block}\n\n{in_turn_block}"
+
+        answer = generate_persona_answer(persona, question, turn_context)
+        answers[persona.name] = answer
+        discussion_lines.append(f"- {persona.name}: {answer}")
+
+    st.session_state.turns.append(ConversationTurn(
+        timestamp=datetime.now().isoformat(),
+        user_question=f"{question} (self-memory re-run)",
+        answers_by_persona=answers
+    ))
+    st.success("Re-asked the same question with self memory.")
+
+# ----------- UI: Chat / Personas / Transcript -----------
 
 def render_chat_tab():
     """Render the main chat interface"""
@@ -547,12 +698,15 @@ def render_chat_tab():
         )
     with col2:
         ask_button = st.button("Ask Personas", type="primary", use_container_width=True)
+        reask_button = st.button(
+            "Re-ask same question",
+            help="Ask the previous question again; each persona sees their own prior answer from that turn."
+        )
     
-    # Process question
+    # Process new question
     if ask_button and question:
         with st.spinner(f"Getting responses from {len(st.session_state.selected_persona_names)} personas..."):
-            # If you want no carryover between turns, set base_context = ""
-            base_context = ""  # or get_conversation_context() if you ever re-enable carryover
+            base_context = ""  # no cross-turn carryover
             answers: Dict[str, str] = {}
 
             # Determine speaking order randomly each turn
@@ -564,8 +718,6 @@ def render_chat_tab():
 
             for idx, persona in enumerate(selected_personas, start=1):
                 if discussion_lines:
-                    # Provide earlier speakers' remarks as part of the helpful context,
-                    # and nudge the persona to react/engage before adding their own view.
                     turn_context = (
                         "Prior speakers this turn:\n"
                         + "\n".join(discussion_lines)
@@ -573,13 +725,11 @@ def render_chat_tab():
                           "(agree/disagree, add nuance) before sharing your own view."
                     )
                 else:
-                    # First speaker gets only per-turn guidance
                     turn_context = (
                         "You are the first to speak this turn. "
                         "State your perspective clearly and concisely."
                     )
 
-                # (base_context currently empty by default; append if you later re-enable it)
                 if base_context:
                     turn_context = f"{base_context} || {turn_context}"
 
@@ -596,6 +746,14 @@ def render_chat_tab():
             st.session_state.turns.append(turn)
         
         st.success("Responses collected!")
+
+    # Re-ask same question with self memory (re-run last turn)
+    if reask_button:
+        if not st.session_state.turns:
+            st.warning("No previous turn to re-ask yet.")
+        else:
+            with st.spinner("Re-asking the same question with self memory..."):
+                rerun_last_turn_with_self_memory()
     
     # Display latest responses (in the order they were spoken)
     if st.session_state.turns:
@@ -844,7 +1002,7 @@ def render_transcript_tab():
         st.info("No conversation yet. Start asking questions in the Chat tab!")
         return
     
-    # Export button
+    # Export / Clear / Summarize buttons
     col1, col2, col3 = st.columns([1, 1, 2])
     with col1:
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
@@ -861,18 +1019,30 @@ def render_transcript_tab():
     with col2:
         if st.button("Clear Transcript", help="Remove all previous turns from this session."):
             st.session_state.turns = []
+            st.session_state.pop("conversation_summary", None)
             st.success("Transcript cleared!")
             st.rerun()
+
+    with col3:
+        if st.button("Summarize Conversation", help="Generate a concise summary of the entire transcript."):
+            with st.spinner("Summarizing the conversation..."):
+                full_text = export_transcript()
+                summary = summarize_conversation(full_text)
+                st.session_state.conversation_summary = summary or "No summary available."
+            st.success("Summary generated below.")
+    
+    # Show conversation summary if available
+    if st.session_state.get("conversation_summary"):
+        st.subheader("Conversation Summary")
+        st.markdown(st.session_state.conversation_summary)
+        st.divider()
     
     # Display transcript
-    st.divider()
-    
     for i, turn in enumerate(st.session_state.turns, 1):
         with st.expander(f"Turn {i} - {turn.user_question[:50]}...", expanded=(i == len(st.session_state.turns))):
             st.markdown(f"**Timestamp:** {turn.timestamp}")
             st.markdown(f"**Question:** {turn.user_question}")
             st.divider()
-            
             for name, answer in turn.answers_by_persona.items():
                 st.markdown(f"**{name}:**")
                 st.markdown(answer)
@@ -903,7 +1073,7 @@ def main():
     with st.sidebar:
         st.title("Settings")
         
-        # Default Model Selection
+        # Default LLM Model
         st.subheader("Default LLM Model")
         default_model = st.selectbox(
             "Select default model for all personas",
@@ -941,3 +1111,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+```

@@ -1,75 +1,72 @@
 # Focus Group Chatbot (Streamlit)
 
-Simulate a live **multi-persona focus group** on any question. Each turn picks a **random first speaker**, and all subsequent personas **see and can react** to earlier replies from that same turn. Answers are kept in **first-person voice** per persona (even when using web search), with **no carryover context** between questions by default.
+Get diverse, first-person perspectives from multiple personas, all “in the same room.” Ask a question once, watch personas respond in sequence (random first speaker each turn), and **re-ask the same question** so personas can revise their answers with “self memory.”
 
 ---
 
 ## ✨ Features
 
-* **Multiple personas** loaded from a `personas.json` file (add/edit/delete in the UI, persisted to disk).
-* **Random speaking order** each turn to keep discussions fresh.
-* **In-turn awareness:** later speakers can reference/critique earlier replies.
-* **First-person voice** enforced across OpenAI, Gemini, and Claude paths.
-* **Optional web facts** via Tavily Search API (tool-style call), woven naturally into persona responses.
-* **Transcript export** to `.txt`.
-* **Reload from file** button for hot-reloading `personas.json`.
-* **Helpful tooltips** on every persona field for consistent data entry.
+* **Multi-persona chat**: several predefined personas answer in-character, concisely, and in **first person** (no emojis).
+* **Random speaking order per turn**: first speaker is chosen randomly each time; later speakers can see earlier replies **from the same turn** and react.
+* **Re-ask same question**: one-click **self-memory re-run** of the last question. Each persona sees their **own** previous answer and can update it.
+* **No cross-turn carryover (by default)**: each new question starts fresh unless you use the “Re-ask” feature.
+* **Personas from file**: personas are loaded from `personas.json`. Editing/deleting personas in the UI **persists** back to that file.
+* **Persona management**: activate/deactivate, edit, and delete personas; tooltips explain each field.
+* **Transcript tools**: download as `.txt`, clear history, and **summarize the full conversation**.
+* **Multi-model**: choose default LLM (OpenAI, Gemini, Claude). Per-persona overrides supported.
+* **Optional web search**: Tavily-backed `web_search` tool (via OpenAI tools) for fresh facts; citations woven into first-person persona answers.
 
 ---
 
-## 🧱 Tech
+## 🚀 Quickstart
 
-* **Streamlit** UI
-* **OpenAI / Google Generative AI (Gemini) / Anthropic (Claude)** clients
-* **Tavily Search API** for web results
-* Python 3.10+ recommended
+### 1) Prerequisites
 
----
+* Python **3.10 – 3.12** recommended
+* A modern browser
+* At least one API key (OpenAI, Gemini, or Claude). Tavily key is optional (required only for web search).
 
-## 📦 Setup
-
-### 1) Clone & create a virtual environment
+### 2) Install
 
 ```bash
-git clone https://github.com/<your-org>/<your-repo>.git
-cd <your-repo>
-python -m venv .venv
-source .venv/bin/activate  # on macOS/Linux
-# .venv\Scripts\activate   # on Windows
+# Clone your repo
+git clone https://github.com/<your-org-or-user>/persona-focus-group.git
+cd persona-focus-group
+
+# Create & activate venv (macOS/Linux)
+python3 -m venv .venv
+source .venv/bin/activate
+
+# Windows (PowerShell)
+# python -m venv .venv
+# .venv\Scripts\Activate.ps1
+
+# Install dependencies
+pip install -r requirements.txt  # or: pip install streamlit openai google-generativeai anthropic requests
 ```
 
-### 2) Install dependencies
+### 3) Configure secrets
 
-```bash
-pip install -r requirements.txt
-```
-
-If you don’t have a `requirements.txt` yet, this minimal set works:
-
-```txt
-streamlit
-requests
-openai
-google-generativeai
-anthropic
-```
-
-### 3) Add API keys (`.streamlit/secrets.toml`)
-
-Create `.streamlit/secrets.toml` in the repo root:
+Create `.streamlit/secrets.toml`:
 
 ```toml
-OPENAI_API_KEY = "sk-..."
-GEMINI_API_KEY = "..."
-CLAUDE_API_KEY = "..."
-TAVILY_API_KEY = "tvly-..."
+# .streamlit/secrets.toml
+
+# Use at least one of these providers. The app lets you pick the default in the sidebar.
+OPENAI_API_KEY = "sk-...optional"
+GEMINI_API_KEY = "AIza...optional"
+CLAUDE_API_KEY = "sk-ant-...optional"
+
+# Optional: for the web_search tool when personas need fresh info
+TAVILY_API_KEY = "tvly-...optional"
 ```
 
-> Only the keys you actually use need to be set. If a key is missing, the respective model/tool will gracefully report an error.
+> You only need **one** of the model keys to start. Add Tavily if you want web search.
 
-### 4) Personas file (`personas.json`)
+### 4) (Optional) Seed personas file
 
-Place a `personas.json` (UTF-8) in the repo root. Example:
+If `personas.json` is missing or invalid, the app writes seed personas automatically.
+To provide your own upfront, create `personas.json` in the repo root:
 
 ```json
 [
@@ -80,167 +77,169 @@ Place a `personas.json` (UTF-8) in the repo root. Example:
     "location": "San Francisco, CA",
     "cultural_background": "Chinese-American",
     "education_level": "Bachelor's",
-    "personality_traits": ["Creative", "Tech-savvy", "Idealistic", "Impatient"],
-    "hobbies": ["Gaming", "TikTok creation", "Anime", "Hackathons"],
+    "personality_traits": ["Creative","Tech-savvy","Idealistic","Impatient"],
+    "hobbies": ["Gaming","TikTok creation","Anime","Hackathons"],
     "tech_savviness": "Expert",
     "goals_motivations": "Build innovative apps that make a social impact",
     "pain_points": "Student debt, finding authentic connections, climate anxiety",
     "speaking_style": "Casual with tech slang, direct",
-    "affinity_keywords": ["innovation", "sustainability", "diversity", "disruption"],
+    "affinity_keywords": ["innovation","sustainability","diversity","disruption"],
     "llm_model": "Default"
   }
+  // ...add more personas
 ]
 ```
 
-You can also manage personas entirely in the UI; changes are saved back to `personas.json`.
-
----
-
-## ▶️ Run
+### 5) Run
 
 ```bash
 streamlit run app.py
 ```
 
-Open the local URL that Streamlit prints (usually `http://localhost:8501`).
+Open the local URL Streamlit prints (usually [http://localhost:8501](http://localhost:8501)).
 
 ---
 
-## 🧭 How it works
+## 🧭 Using the App
 
-* **Per-turn flow**
+### Chat tab
 
-  1. You ask a question.
-  2. The app randomly shuffles the active personas.
-  3. The first persona answers with no previous-turn context.
-  4. Each subsequent persona receives the earlier replies from the **same turn** and can agree, disagree, or add nuance.
-  5. All answers are stored (and exportable) in a transcript.
+* **Ask Personas**: type your question and click “Ask Personas.”
 
-* **First-person voice**
+  * The **first speaker is random** each turn.
+  * Later speakers see earlier replies from this turn and may agree/disagree or add nuance.
+* **Re-ask same question**: re-runs the **last question**.
+  Each persona sees **their own previous answer** and is instructed to **reflect and update** (do not repeat verbatim; say what they keep/change and why). A new turn is saved and labeled `"(self-memory re-run)"`.
 
-  * Persona identity + style are injected as a **system-level instruction** to the selected LLM path, enforcing first-person responses even when web search is used.
+### Persona Management tab
 
-* **No carryover context**
+* **Activate/Deactivate** personas (these are the ones who will respond in the next turn).
+* **Edit** persona fields (tooltips explain each field).
+  Changes are **saved back to `personas.json`** automatically.
+* **Delete** a persona (also persisted to `personas.json`).
 
-  * Each question starts fresh (no prior turns). You can change this in code if you ever want cross-turn continuity.
+### Transcript tab
 
-* **Web search (optional)**
-
-  * When a model chooses to fetch facts, it calls Tavily under the hood. Results are summarized into the persona’s own words.
-
----
-
-## 🧩 UI Primer
-
-* **Chat tab:** ask a question → see ordered persona cards (speaking order preserved).
-* **Persona Management:**
-
-  * Toggle **Active** to include/exclude personas from the next question.
-  * **Edit/Delete** personas (saved to `personas.json` automatically).
-  * Tooltips on every field clarify expected values.
-* **Transcript:** download `.txt`, or clear the in-memory history.
-* **Sidebar Settings:**
-
-  * Set default LLM (applies when a persona’s model is “Default”).
-  * **Reload personas from file** (if you edited `personas.json` outside the app).
+* **Download Transcript (.txt)**: saves the full chat history with speakers in order.
+* **Clear Transcript**: removes all turns from this session.
+* **Summarize Conversation**: generates an overview, highlights, and action items for the entire history.
 
 ---
 
-## 🧾 Persona schema (summary)
+## ⚙️ Configuration Details
 
-| Field                 | Type          | Example / Guidance                                              |
-| --------------------- | ------------- | --------------------------------------------------------------- |
-| `name`                | string        | Unique display name (e.g., “Zara Chen”).                        |
-| `age_group`           | enum          | “Gen Z”, “Millennial”, “Gen X”, “Boomer”, “Silent”.             |
-| `occupation`          | string        | Job/role shaping priorities and examples.                       |
-| `location`            | string        | “City, Region/Country” (e.g., “Austin, TX”).                    |
-| `cultural_background` | string        | Heritage/identity notes (e.g., “Cuban-American”).               |
-| `education_level`     | enum          | “High School”, “Trade School”, “Bachelor's”, “Master's”, “PhD”. |
-| `personality_traits`  | list\<string> | Adjectives (e.g., “Curious”, “Pragmatic”).                      |
-| `hobbies`             | list\<string> | Interests (e.g., “Hiking”, “Podcasts”).                         |
-| `tech_savviness`      | enum          | “Low”, “Moderate”, “High”, “Expert”.                            |
-| `goals_motivations`   | string        | 1–2 sentences on what drives them.                              |
-| `pain_points`         | string        | Constraints/frustrations (time, budget…).                       |
-| `speaking_style`      | string        | Voice/tone (“Professional and warm; uses analogies”).           |
-| `affinity_keywords`   | list\<string> | Values/topics they prioritize (“sustainability”, “ROI”).        |
-| `llm_model`           | enum          | “Default”, “OpenAI”, “Gemini”, “Claude”.                        |
-
-> In the form, list-type fields also accept **comma-separated strings**; they are converted to lists on save.
+* **Default Model**: Choose OpenAI, Gemini, or Claude from the **sidebar**.
+  Each persona can optionally set its own `llm_model` (`"Default"`, `"OpenAI"`, `"Gemini"`, `"Claude"`).
+* **Web Search**: When using OpenAI as the backend for a persona, answers can call a `web_search` tool powered by **Tavily**. Set `TAVILY_API_KEY` to enable.
+* **First-Person Enforcement**: The app wraps prompts so personas always respond **in first person**, with no emojis, even when tools are used.
+* **No Cross-Turn Carryover**: By default, new questions do **not** inherit prior-turn context. Use **Re-ask same question** when you want per-persona “self memory.”
 
 ---
 
-## 🔧 Configuration Notes
+## 🧩 Persona Schema (fields & what they influence)
 
-* **Model selection**
+* **name**: Unique display name (used in cards and transcript).
+* **age\_group**: “Gen Z”, “Millennial”, “Gen X”, “Boomer”, “Silent” (guides tone/examples).
+* **occupation**: Role/career lens.
+* **location**: E.g., “Austin, TX” or “London, UK”.
+* **cultural\_background**: Identity descriptors that shape viewpoint.
+* **education\_level**: “High School”, “Trade School”, “Bachelor’s”, “Master’s”, “PhD”.
+* **personality\_traits**: Short adjectives, e.g., “Curious, Pragmatic, Empathetic”.
+* **hobbies**: Interests that flavor examples/analogies.
+* **tech\_savviness**: “Low”, “Moderate”, “High”, “Expert”.
+* **goals\_motivations**: What drives the persona (1–2 sentences).
+* **pain\_points**: Constraints/frustrations.
+* **speaking\_style**: Voice/tone; e.g., “Professional but warm; uses analogies”.
+* **affinity\_keywords**: Values/themes they emphasize (e.g., “sustainability, ROI, community”).
+* **llm\_model**: “Default”, “OpenAI”, “Gemini”, “Claude”.
 
-  * Persona-level `llm_model` overrides the global default in the sidebar.
-* **Tooling**
-
-  * Tavily is only used when the model requests it; if `TAVILY_API_KEY` is unset, web search is skipped with an error message captured in the response flow.
-* **Constraints**
-
-  * Responses aim for **120–180 words**, **no emojis**, and explicit assumptions if uncertain.
+> All fields are editable in the UI with inline tooltips. Changes persist to `personas.json`.
 
 ---
 
-## 🚀 Deploy
+## 🧱 Architecture (high level)
 
-### Streamlit Community Cloud
+* **Streamlit UI** with three tabs (Chat / Persona Management / Transcript).
+* **State**: personas, active set, turns (each turn stores the question and a dict of `{persona_name: answer}`).
+* **Speaking engine**:
 
-1. Push to GitHub.
-2. Create a new Streamlit app from your repo.
-3. Add the secrets in the app’s **Settings → Secrets** UI.
-4. Add (or upload) `personas.json`.
+  * Randomize active personas’ order per turn.
+  * Build intra-turn context so later speakers can react to earlier replies.
+* **Self-memory re-run**:
 
-### Docker (optional)
+  * Uses the **last turn**.
+  * Each persona sees their own previous answer and is nudged to revise/extend it.
+  * Saves results as a new turn.
 
-```dockerfile
-FROM python:3.11-slim
-WORKDIR /app
-COPY . /app
-RUN pip install --no-cache-dir -r requirements.txt
-EXPOSE 8501
-CMD ["streamlit", "run", "app.py", "--server.port=8501", "--server.address=0.0.0.0"]
+---
+
+## 🧪 Troubleshooting
+
+* **“ERROR: OpenAI/Gemini/Claude API key not found”**
+  Add the corresponding key to `.streamlit/secrets.toml`. You need at least one provider key.
+* **Tavily search not working**
+  Add `TAVILY_API_KEY` to `.streamlit/secrets.toml` (optional, only needed for web search).
+* **ModuleNotFoundError**
+  Ensure you activated your venv and installed dependencies.
+* **Nothing happens on click**
+  Check the terminal for errors. Also verify you have at least **one active persona** in Persona Management.
+
+---
+
+## 🔒 Security & Privacy
+
+* Keep API keys in `.streamlit/secrets.toml` (never commit them).
+* Consider redacting transcripts before sharing if they include sensitive content.
+* Rate limits and costs depend on your model provider(s).
+
+---
+
+## 🗂 Recommended `.gitignore`
+
+```gitignore
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+*.egg-info/
+.venv/
+.env/
+
+# Streamlit secrets
+.streamlit/secrets.toml
+
+# OS / IDE
+.DS_Store
+.vscode/
+.idea/
 ```
 
 ---
 
-## 🧰 Troubleshooting
+## 📜 License
 
-* **Model errors like “library not installed”**
-  Install the missing client:
+Choose a license (e.g., MIT) and add it as `LICENSE`. Example MIT blurb:
 
-  ```bash
-  pip install openai anthropic google-generativeai
-  ```
-
-* **Web search returns an error**
-  Ensure `TAVILY_API_KEY` is set in `.streamlit/secrets.toml`.
-
-* **Personas not updating**
-
-  * Edits in the UI autosave to `personas.json`.
-  * If you edit the file externally, click **Reload personas from file** in the sidebar.
-
-* **Empty label warning in Streamlit**
-  The input field uses a hidden label (`label_visibility="collapsed"`) to avoid this warning; if you change it, ensure labels aren’t empty strings.
+```
+MIT License — Copyright (c) <Year> <Your Name>
+```
 
 ---
 
-## 🤝 Contributing
+## 🙌 Contributing
 
-1. Fork, create a feature branch, commit changes.
-2. Add/adjust unit tests if applicable.
-3. Submit a PR with a clear description.
+PRs welcome! Ideas: persona galleries, per-turn sliders for temperature/length, richer analytics, or export to PDF/CSV.
 
 ---
 
-## 📄 License
+## 💬 Questions?
 
-MIT (or your preferred license). Add a `LICENSE` file at the repo root.
+Open an issue in the repo with:
 
----
+* Steps to reproduce
+* Streamlit version (`streamlit --version`)
+* Python version (`python --version`)
+* A snippet of your `personas.json` (if relevant)
 
-## 🙌 Acknowledgements
 
-Thanks to OpenAI, Google, Anthropic, and Tavily for the APIs used.
