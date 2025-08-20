@@ -10,6 +10,7 @@ Get diverse, first-person perspectives from multiple personas, all “in the sam
 * **Random speaking order per turn**: first speaker is chosen randomly each time; later speakers can see earlier replies **from the same turn** and react.
 * **Re-ask same question**: one-click **self-memory re-run** of the last question. Each persona sees their **own** previous answer and can update it.
 * **No cross-turn carryover (by default)**: each new question starts fresh unless you use the “Re-ask” feature.
+* **Optional previous-turn context**: in Chat, tick **Use previous turn as context** to share the last question and trimmed persona replies with the group, so answers can build on them.
 * **Personas from file**: personas are loaded from `personas.json`. Editing/deleting personas in the UI **persists** back to that file.
 * **Persona management**: activate/deactivate, edit, and delete personas; tooltips explain each field.
 * **Transcript tools**: download as `.txt`, clear history, and **summarize the full conversation**.

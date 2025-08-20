@@ -611,6 +611,33 @@ def _trim(txt: str, limit: int = 900) -> str:
         return ""
     return txt if len(txt) <= limit else txt[:limit] + "…"
 
+
+def build_previous_turn_context(max_chars_per_persona: int = 280) -> str:
+    """Construct a compact context string from the immediately previous turn.
+    Includes the prior question and trimmed answers per persona.
+    Returns '' if there is no previous turn or no content.
+    """
+    turns = st.session_state.get("turns", [])
+    if not turns:
+        return ""
+    last = turns[-1]
+    if not getattr(last, "user_question", None):
+        return ""
+    parts = [f'Previous turn — Q: "{_trim(last.user_question, 220)}"']
+    # Add one short line per persona
+    if getattr(last, "answers_by_persona", None):
+        parts.append("Key points by persona:")
+        try:
+            # Preserve insertion order for readability
+            items = list(last.answers_by_persona.items())
+        except Exception:
+            items = []
+        for name, ans in items:
+            if not ans:
+                continue
+            parts.append(f"- {name}: {_trim(str(ans).strip(), max_chars_per_persona)}")
+    return "\n".join(parts)
+
 def rerun_last_turn_with_self_memory():
     """Re-run the most recent question; each persona sees their own prior answer and can update it.
     Preserves current behavior: random speaking order and in-turn awareness."""
@@ -696,6 +723,14 @@ def render_chat_tab():
             label_visibility="collapsed",
             key="question_input"
         )
+
+        share_prev = st.checkbox(
+            "Use previous turn as context",
+            key="share_prev_turn",
+            help="Share the last question and short persona replies so current answers can build on them."
+        )
+        if st.session_state.get("share_prev_turn") and st.session_state.get("turns"):
+            st.caption("Context: previous turn will be shared with personas.")
     with col2:
         ask_button = st.button("Ask Personas", type="primary", use_container_width=True)
         reask_button = st.button(
@@ -706,7 +741,7 @@ def render_chat_tab():
     # Process new question
     if ask_button and question:
         with st.spinner(f"Getting responses from {len(st.session_state.selected_persona_names)} personas..."):
-            base_context = ""  # no cross-turn carryover
+            base_context = build_previous_turn_context() if st.session_state.get("share_prev_turn") else ""  # cross-turn carryover if enabled
             answers: Dict[str, str] = {}
 
             # Determine speaking order randomly each turn
